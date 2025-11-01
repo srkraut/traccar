@@ -225,6 +225,45 @@ public class Device extends GroupedModel implements Disableable, Schedulable {
         this.motionDistance = motionDistance;
     }
 
+    private boolean idleState;
+
+    @QueryIgnore
+    @JsonIgnore
+    public boolean getIdleState() {
+        return idleState;
+    }
+
+    @JsonIgnore
+    public void setIdleState(boolean idleState) {
+        this.idleState = idleState;
+    }
+
+    private long idlePositionId;
+
+    @QueryIgnore
+    @JsonIgnore
+    public long getIdlePositionId() {
+        return idlePositionId;
+    }
+
+    @JsonIgnore
+    public void setIdlePositionId(long idlePositionId) {
+        this.idlePositionId = idlePositionId;
+    }
+
+    private Date idleTime;
+
+    @QueryIgnore
+    @JsonIgnore
+    public Date getIdleTime() {
+        return idleTime;
+    }
+
+    @JsonIgnore
+    public void setIdleTime(Date idleTime) {
+        this.idleTime = idleTime;
+    }
+
     private boolean overspeedState;
 
     @QueryIgnore

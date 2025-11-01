@@ -27,6 +27,7 @@ import org.traccar.model.UserRestrictions;
 import org.traccar.reports.CombinedReportProvider;
 import org.traccar.reports.DevicesReportProvider;
 import org.traccar.reports.EventsReportProvider;
+import org.traccar.reports.IdleReportProvider;
 import org.traccar.reports.RouteReportProvider;
 import org.traccar.reports.StopsReportProvider;
 import org.traccar.reports.SummaryReportProvider;
@@ -34,6 +35,7 @@ import org.traccar.reports.TripsReportProvider;
 import org.traccar.reports.common.ReportExecutor;
 import org.traccar.reports.common.ReportMailer;
 import org.traccar.reports.model.CombinedReportItem;
+import org.traccar.reports.model.IdleReportItem;
 import org.traccar.reports.model.StopReportItem;
 import org.traccar.reports.model.SummaryReportItem;
 import org.traccar.reports.model.TripReportItem;
@@ -73,6 +75,9 @@ public class ReportResource extends SimpleObjectResource<Report> {
 
     @Inject
     private StopsReportProvider stopsReportProvider;
+
+    @Inject
+    private IdleReportProvider idleReportProvider;
 
     @Inject
     private SummaryReportProvider summaryReportProvider;
@@ -332,6 +337,46 @@ public class ReportResource extends SimpleObjectResource<Report> {
             @QueryParam("to") Date to,
             @PathParam("type") String type) throws StorageException {
         return getStopsExcel(deviceIds, groupIds, from, to, type.equals("mail"));
+    }
+
+    @Path("idle")
+    @GET
+    public Collection<IdleReportItem> getIdle(
+            @QueryParam("deviceId") List<Long> deviceIds,
+            @QueryParam("groupId") List<Long> groupIds,
+            @QueryParam("from") Date from,
+            @QueryParam("to") Date to) throws StorageException {
+        permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
+        actionLogger.report(request, getUserId(), false, "idle", from, to, deviceIds, groupIds);
+        return idleReportProvider.getObjects(getUserId(), deviceIds, groupIds, from, to);
+    }
+
+    @Path("idle")
+    @GET
+    @Produces(EXCEL)
+    public Response getIdleExcel(
+            @QueryParam("deviceId") List<Long> deviceIds,
+            @QueryParam("groupId") List<Long> groupIds,
+            @QueryParam("from") Date from,
+            @QueryParam("to") Date to,
+            @QueryParam("mail") boolean mail) throws StorageException {
+        permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
+        return executeReport(getUserId(), mail, stream -> {
+            actionLogger.report(request, getUserId(), false, "idle", from, to, deviceIds, groupIds);
+            idleReportProvider.getExcel(stream, getUserId(), deviceIds, groupIds, from, to);
+        });
+    }
+
+    @Path("idle/{type:xlsx|mail}")
+    @GET
+    @Produces(EXCEL)
+    public Response getIdleExcel(
+            @QueryParam("deviceId") List<Long> deviceIds,
+            @QueryParam("groupId") List<Long> groupIds,
+            @QueryParam("from") Date from,
+            @QueryParam("to") Date to,
+            @PathParam("type") String type) throws StorageException {
+        return getIdleExcel(deviceIds, groupIds, from, to, type.equals("mail"));
     }
 
     @Path("devices/{type:xlsx|mail}")

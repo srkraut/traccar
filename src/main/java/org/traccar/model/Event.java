@@ -50,6 +50,8 @@ public class Event extends Message {
 
     public static final String TYPE_DEVICE_MOVING = "deviceMoving";
     public static final String TYPE_DEVICE_STOPPED = "deviceStopped";
+    public static final String TYPE_DEVICE_IDLE_START = "deviceIdleStart";
+    public static final String TYPE_DEVICE_IDLE_END = "deviceIdleEnd";
 
     public static final String TYPE_DEVICE_OVERSPEED = "deviceOverspeed";
     public static final String TYPE_DEVICE_FUEL_DROP = "deviceFuelDrop";

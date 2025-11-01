@@ -1395,6 +1395,31 @@ public final class Keys {
             false);
 
     /**
+     * Minimal idle duration threshold. Idle periods less than this duration are ignored. Default 300 seconds (5 minutes).
+     */
+    public static final ConfigKey<Long> REPORT_IDLE_MINIMAL_DURATION = new LongConfigKey(
+            "report.idle.minimalDuration",
+            List.of(KeyType.CONFIG, KeyType.DEVICE),
+            300L);
+
+    /**
+     * Minimal engine hours for idle reporting. Idle periods with less engine hours are filtered out. Default 0 (disabled).
+     */
+    public static final ConfigKey<Long> REPORT_IDLE_MINIMAL_ENGINE_HOURS = new LongConfigKey(
+            "report.idle.minimalEngineHours",
+            List.of(KeyType.CONFIG, KeyType.DEVICE),
+            0L);
+
+    /**
+     * Minimal fuel consumption for idle reporting. Idle periods with less fuel consumption are filtered out.
+     * Value in liters. Default 0 (disabled).
+     */
+    public static final ConfigKey<Double> REPORT_IDLE_MINIMAL_FUEL = new DoubleConfigKey(
+            "report.idle.minimalFuel",
+            List.of(KeyType.CONFIG, KeyType.DEVICE),
+            0.0);
+
+    /**
      * Boolean flag to enable or disable position filtering.
      */
     public static final ConfigKey<Boolean> FILTER_ENABLE = new BooleanConfigKey(

@@ -43,6 +43,7 @@ import org.traccar.model.Event;
 import org.traccar.model.Position;
 import org.traccar.model.User;
 import org.traccar.reports.model.BaseReportItem;
+import org.traccar.reports.model.IdleReportItem;
 import org.traccar.reports.model.StopReportItem;
 import org.traccar.reports.model.TripReportItem;
 import org.traccar.session.state.MotionProcessor;
@@ -406,6 +407,120 @@ public class ReportUtils {
         }
 
         return result;
+    }
+
+    private IdleReportItem calculateIdle(
+            Device device, Position startIdle, Position endIdle, boolean ignoreOdometer) {
+
+        IdleReportItem idle = new IdleReportItem();
+
+        long deviceId = startIdle.getDeviceId();
+        idle.setDeviceId(deviceId);
+        idle.setDeviceName(device.getName());
+
+        idle.setPositionId(startIdle.getId());
+        idle.setLatitude(startIdle.getLatitude());
+        idle.setLongitude(startIdle.getLongitude());
+        idle.setStartTime(startIdle.getFixTime());
+        String address = startIdle.getAddress();
+        if (address == null && geocoder != null && config.getBoolean(Keys.GEOCODER_ON_REQUEST)) {
+            address = geocoder.getAddress(idle.getLatitude(), idle.getLongitude(), null);
+        }
+        idle.setAddress(address);
+
+        idle.setEndTime(endIdle.getFixTime());
+
+        long idleDuration = endIdle.getFixTime().getTime() - startIdle.getFixTime().getTime();
+        idle.setDuration(idleDuration);
+        idle.setSpentFuel(calculateFuel(startIdle, endIdle));
+
+        if (startIdle.hasAttribute(Position.KEY_HOURS) && endIdle.hasAttribute(Position.KEY_HOURS)) {
+            idle.setEngineHours(endIdle.getLong(Position.KEY_HOURS) - startIdle.getLong(Position.KEY_HOURS));
+        }
+
+        if (!ignoreOdometer
+                && startIdle.getDouble(Position.KEY_ODOMETER) != 0
+                && endIdle.getDouble(Position.KEY_ODOMETER) != 0) {
+            idle.setStartOdometer(startIdle.getDouble(Position.KEY_ODOMETER));
+            idle.setEndOdometer(endIdle.getDouble(Position.KEY_ODOMETER));
+        } else {
+            idle.setStartOdometer(startIdle.getDouble(Position.KEY_TOTAL_DISTANCE));
+            idle.setEndOdometer(endIdle.getDouble(Position.KEY_TOTAL_DISTANCE));
+        }
+
+        return idle;
+    }
+
+    public List<IdleReportItem> detectIdle(
+            Device device, Date from, Date to) throws StorageException {
+
+        List<IdleReportItem> result = new ArrayList<>();
+        var attributeProvider = new AttributeUtil.StorageProvider(config, storage, permissionsService, device);
+        TripsConfig tripsConfig = new TripsConfig(attributeProvider);
+        boolean ignoreOdometer = tripsConfig.getIgnoreOdometer();
+
+        // Idle-specific thresholds
+        long minimalIdleDuration = AttributeUtil.lookup(
+                attributeProvider, Keys.REPORT_IDLE_MINIMAL_DURATION) * 1000;
+        long minimalEngineHours = AttributeUtil.lookup(
+                attributeProvider, Keys.REPORT_IDLE_MINIMAL_ENGINE_HOURS) * 1000;
+        double minimalFuelConsumption = AttributeUtil.lookup(
+                attributeProvider, Keys.REPORT_IDLE_MINIMAL_FUEL);
+
+        Position startIdle = null;
+        var positions = PositionUtil.getPositions(storage, device.getId(), from, to);
+
+        for (Position position : positions) {
+            boolean motion = position.getBoolean(Position.KEY_MOTION);
+            boolean ignition = position.getBoolean(Position.KEY_IGNITION);
+
+            // Idle condition: not moving AND ignition is ON
+            boolean isIdle = !motion && ignition;
+
+            if (isIdle && startIdle == null) {
+                // Start of idle period
+                startIdle = position;
+            } else if (!isIdle && startIdle != null) {
+                // End of idle period
+                IdleReportItem idle = calculateIdle(device, startIdle, position, ignoreOdometer);
+                if (isIdleValid(idle, minimalIdleDuration, minimalEngineHours, minimalFuelConsumption)) {
+                    result.add(idle);
+                }
+                startIdle = null;
+            }
+        }
+
+        // Handle ongoing idle at the end of the period
+        if (startIdle != null && !positions.isEmpty()) {
+            Position endPosition = positions.get(positions.size() - 1);
+            IdleReportItem idle = calculateIdle(device, startIdle, endPosition, ignoreOdometer);
+            if (isIdleValid(idle, minimalIdleDuration, minimalEngineHours, minimalFuelConsumption)) {
+                result.add(idle);
+            }
+        }
+
+        return result;
+    }
+
+    private boolean isIdleValid(
+            IdleReportItem idle, long minimalDuration, long minimalEngineHours, double minimalFuel) {
+
+        // Check duration threshold
+        if (idle.getDuration() < minimalDuration) {
+            return false;
+        }
+
+        // Check engine hours threshold (if configured)
+        if (minimalEngineHours > 0 && idle.getEngineHours() < minimalEngineHours) {
+            return false;
+        }
+
+        // Check fuel consumption threshold (if configured)
+        if (minimalFuel > 0 && idle.getSpentFuel() < minimalFuel) {
+            return false;
+        }
+
+        return true;
     }
 
 }
