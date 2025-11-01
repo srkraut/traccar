@@ -429,7 +429,7 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
         }
     }
 
-    private String decodeAlarm(short value, boolean modelLW, boolean modelSW, boolean modelVL) {
+    private String decodeAlarm(short value, boolean modelLW, boolean modelSW, boolean modelVL, boolean modelTrackon) {
         return switch (value) {
             case 0x01 -> Position.ALARM_SOS;
             case 0x02 -> Position.ALARM_POWER_CUT;
@@ -437,7 +437,16 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
             case 0x04 -> Position.ALARM_GEOFENCE_ENTER;
             case 0x05 -> Position.ALARM_GEOFENCE_EXIT;
             case 0x06 -> Position.ALARM_OVERSPEED;
-            case 0x09 -> modelVL ? Position.ALARM_TOW : Position.ALARM_VIBRATION;
+            case 0x09 -> {
+                if (modelTrackon) {
+                    yield Position.ALARM_REMOVING; // Displacement alarm for Trackon
+                } else if (modelVL) {
+                    yield Position.ALARM_TOW;
+                } else {
+                    yield Position.ALARM_VIBRATION;
+                }
+            }
+            case 0x0D -> modelTrackon ? Position.ALARM_ACCIDENT : null; // Collision alarm for Trackon
             case 0x0E, 0x0F -> Position.ALARM_LOW_BATTERY;
             case 0x11 -> Position.ALARM_POWER_OFF;
             case 0x0C, 0x13, 0x25 -> Position.ALARM_TAMPERING;
@@ -449,9 +458,26 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
             case 0x23 -> Position.ALARM_FALL_DOWN;
             case 0x26 -> Position.ALARM_ACCELERATION;
             case 0x28 -> modelSW ? Position.ALARM_CORNERING : Position.ALARM_BRAKING;
-            case 0x29 -> modelSW ? Position.ALARM_ACCIDENT : Position.ALARM_ACCELERATION;
+            case 0x29 -> {
+                if (modelTrackon) {
+                    yield Position.ALARM_ACCELERATION; // Rapid acceleration alarm for Trackon
+                } else if (modelSW) {
+                    yield Position.ALARM_ACCIDENT;
+                } else {
+                    yield Position.ALARM_ACCELERATION;
+                }
+            }
             case 0x2C -> Position.ALARM_ACCIDENT;
-            case 0x30 -> modelVL ? Position.ALARM_BRAKING : Position.ALARM_JAMMING;
+            case 0x30 -> {
+                if (modelTrackon) {
+                    yield Position.ALARM_BRAKING; // Rapid deceleration alarm for Trackon
+                } else if (modelVL) {
+                    yield Position.ALARM_BRAKING;
+                } else {
+                    yield Position.ALARM_JAMMING;
+                }
+            }
+            case 0x4C -> modelTrackon ? Position.ALARM_CORNERING : null; // Sharp turn alarm for Trackon
             default -> null;
         };
     }
@@ -480,6 +506,7 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
         boolean modelSW = "SEEWORLD".equalsIgnoreCase(model);
         boolean modelNT20 = "NT20".equalsIgnoreCase(model);
         boolean modelVL = model != null && Set.of("VL103", "LL303", "VL512").contains(model);
+        boolean modelTrackon = "TRACKON".equalsIgnoreCase(model);
 
         if (type == MSG_LOGIN) {
 
@@ -843,7 +870,7 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
                     int satellites = BitUtil.between(signal, 10, 15) + BitUtil.between(signal, 5, 10);
                     position.set(Position.KEY_SATELLITES, satellites);
                     position.set(Position.KEY_RSSI, BitUtil.to(signal, 5));
-                    position.addAlarm(decodeAlarm(buf.readUnsignedByte(), modelLW, modelSW, modelVL));
+                    position.addAlarm(decodeAlarm(buf.readUnsignedByte(), modelLW, modelSW, modelVL, modelTrackon));
                     buf.readUnsignedByte(); // language
                     position.set(Position.KEY_BATTERY_LEVEL, buf.readUnsignedByte());
                     int mode = buf.readUnsignedByte();
@@ -878,7 +905,7 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
                         if (type == MSG_STATUS && modelSW) {
                             position.set(Position.KEY_POWER, (double) extension);
                         } else if (variant != Variant.VXT01) {
-                            position.addAlarm(decodeAlarm(extension, modelLW, modelSW, modelVL));
+                            position.addAlarm(decodeAlarm(extension, modelLW, modelSW, modelVL, modelTrackon));
                         }
                     }
                 }
@@ -940,7 +967,7 @@ public class Gt06ProtocolDecoder extends BaseProtocolDecoder {
                     decodeStatus(position, buf);
                     position.set(Position.KEY_POWER, buf.readUnsignedShort() * 0.01);
                     position.set(Position.KEY_RSSI, buf.readUnsignedByte());
-                    position.addAlarm(decodeAlarm(buf.readUnsignedByte(), modelLW, modelSW, modelVL));
+                    position.addAlarm(decodeAlarm(buf.readUnsignedByte(), modelLW, modelSW, modelVL, modelTrackon));
                     position.set("oil", buf.readUnsignedShort());
                     int temperature = buf.readUnsignedByte();
                     if (BitUtil.check(temperature, 7)) {
