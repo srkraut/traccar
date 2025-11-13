@@ -16,11 +16,15 @@
 package org.traccar.handler;
 
 import jakarta.inject.Inject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.traccar.model.Device;
 import org.traccar.model.Position;
 import org.traccar.session.cache.CacheManager;
 
 public class SpeedAdjustmentHandler extends BasePositionHandler {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(SpeedAdjustmentHandler.class);
 
     public static final String ATTRIBUTE_SPEED_ADJUSTMENT_FACTOR = "speedAdjustmentFactor";
 
@@ -36,11 +40,18 @@ public class SpeedAdjustmentHandler extends BasePositionHandler {
         Device device = cacheManager.getObject(Device.class, position.getDeviceId());
         if (device != null) {
             Double speedAdjustmentFactor = device.getDouble(ATTRIBUTE_SPEED_ADJUSTMENT_FACTOR);
+            LOGGER.info("SpeedAdjustmentHandler - Device: {}, Original Speed: {}, Factor: {}",
+                    device.getId(), position.getSpeed(), speedAdjustmentFactor);
             if (speedAdjustmentFactor != null && speedAdjustmentFactor > 0) {
                 double currentSpeed = position.getSpeed();
                 double adjustedSpeed = currentSpeed * speedAdjustmentFactor;
                 position.setSpeed(adjustedSpeed);
+                LOGGER.info("Speed adjusted from {} to {}", currentSpeed, adjustedSpeed);
+            } else {
+                LOGGER.info("No speed adjustment - factor is null or invalid");
             }
+        } else {
+            LOGGER.warn("Device not found in cache for deviceId: {}", position.getDeviceId());
         }
         callback.processed(false);
     }
